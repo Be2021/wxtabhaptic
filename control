@@ -2,8 +2,8 @@ Package: com.local.wxtabhaptic
 Name: WXTabHaptic
 Version: 0.0.1
 Architecture: iphoneos-arm64
-Description: WeChat bottom tab haptic feedback
+Description: WeChat bottom tab haptic feedback for rootless and TrollStore
 Maintainer: local
 Author: local
 Section: Tweaks
-Depends: firmware (>= 15.0), ellekit
+Depends: firmware (>= 15.0)
