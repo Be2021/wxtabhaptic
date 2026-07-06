@@ -13,22 +13,16 @@ static BOOL WXTabHapticEnabled(void) {
 }
 
 static BOOL WXAllowRepeatCurrentTabHaptic(void) {
-    // YES：重复点击当前 Tab 也震动
-    // NO：只有切换不同 Tab 才震动
     return YES;
 }
 
 static BOOL WXUseAudioFallback(void) {
-    // YES：UIKit 触感 + AudioServices 兜底，巨魔和无根都更明显
     return YES;
 }
 
 static SystemSoundID WXAudioFallbackSoundID(void) {
-    // 1519：轻触
-    // 1520：中等
-    // 1521：稍强
-    // kSystemSoundID_Vibrate：最强但偏长
-    return 1520;
+    // 1519 轻中等，1520 中偏强，1521 较强
+    return 1519;
 }
 
 static NSString *WXNormalizeTabText(NSString *text) {
@@ -76,7 +70,7 @@ static void WXPrepareHaptic(void) {
         if (@available(iOS 10.0, *)) {
             if (!WXImpactGenerator) {
                 WXImpactGenerator =
-                    [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
+                    [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
             }
 
             if (!WXSelectionGenerator) {
@@ -89,12 +83,12 @@ static void WXPrepareHaptic(void) {
     });
 }
 
-static void WXDoCombinedHaptic(void) {
+static void WXDoMediumHaptic(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (@available(iOS 10.0, *)) {
             if (!WXImpactGenerator) {
                 WXImpactGenerator =
-                    [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
+                    [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
             }
 
             if (!WXSelectionGenerator) {
@@ -104,14 +98,15 @@ static void WXDoCombinedHaptic(void) {
             [WXImpactGenerator prepare];
             [WXImpactGenerator impactOccurred];
 
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.025 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            // 轻微补一下，不会太重
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.018 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [WXSelectionGenerator prepare];
                 [WXSelectionGenerator selectionChanged];
             });
         }
 
         if (WXUseAudioFallback()) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.015 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.012 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 AudioServicesPlaySystemSound(WXAudioFallbackSoundID());
             });
         }
@@ -124,14 +119,7 @@ static void WXDoTabHaptic(NSString *tabText) {
 
     NSTimeInterval now = NSDate.date.timeIntervalSince1970;
 
-    // 避免 UITabBarButton 和 MMTabBarItemView 同时触发导致连续两下
-    if (now - WXLastHapticTime < 0.14) {
-        return;
-    }
-
-    if (!WXAllowRepeatCurrentTabHaptic() &&
-        WXLastTabText &&
-        [WXLastTabText isEqualToString:tabText]) {
+    if (now - WXLastHapticTime < 0.16) {
         return;
     }
 
@@ -139,7 +127,7 @@ static void WXDoTabHaptic(NSString *tabText) {
     WXLastHapticTime = now;
 
     WXPrepareHaptic();
-    WXDoCombinedHaptic();
+    WXDoMediumHaptic();
 }
 
 %hook UITabBarButton
@@ -175,5 +163,5 @@ static void WXDoTabHaptic(NSString *tabText) {
         WXPrepareHaptic();
     });
 
-    NSLog(@"[WXTabHaptic] universal haptic loaded");
+    NSLog(@"[WXTabHaptic] medium haptic loaded");
 }
