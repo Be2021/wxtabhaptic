@@ -1,0 +1,39 @@
+name: Build rootless deb
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install ldid xz
+
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Install iPhoneOS SDK
+        run: |
+          mkdir -p $HOME/theos/sdks
+          curl -L -o /tmp/sdk.tar.xz https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz
+          tar -xf /tmp/sdk.tar.xz -C $HOME/theos/sdks
+
+      - name: Build package
+        run: |
+          make clean package THEOS_PACKAGE_SCHEME=rootless
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: WXTabHaptic-rootless
+          path: packages/*.deb
