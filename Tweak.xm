@@ -2,18 +2,43 @@
 #import <objc/runtime.h>
 
 static NSTimeInterval WXLastHapticTime = 0;
+static NSString *WXLastTabText = nil;
 
-static BOOL WXIsWeChatTabText(NSString *text) {
-    if (text.length == 0) return NO;
+static BOOL WXTabHapticEnabled(void) {
+    return YES;
+}
 
-    return [text isEqualToString:@"微信"] ||
-           [text hasPrefix:@"微信("] ||
-           [text isEqualToString:@"通讯录"] ||
-           [text isEqualToString:@"发现"] ||
-           [text isEqualToString:@"我"];
+static BOOL WXAllowRepeatCurrentTabHaptic(void) {
+    // YES = 重复点击当前 Tab 也震动
+    // NO  = 只有切换到不同 Tab 才震动
+    return NO;
+}
+
+static NSString *WXNormalizeTabText(NSString *text) {
+    if (text.length == 0) return nil;
+
+    if ([text hasPrefix:@"微信"]) {
+        return @"微信";
+    }
+
+    if ([text isEqualToString:@"通讯录"]) {
+        return @"通讯录";
+    }
+
+    if ([text isEqualToString:@"发现"]) {
+        return @"发现";
+    }
+
+    if ([text isEqualToString:@"我"]) {
+        return @"我";
+    }
+
+    return nil;
 }
 
 static NSString *WXTextFromView(UIView *view) {
+    if (!view) return nil;
+
     if ([view isKindOfClass:UILabel.class]) {
         return ((UILabel *)view).text;
     }
@@ -26,49 +51,71 @@ static NSString *WXTextFromView(UIView *view) {
     return nil;
 }
 
-static BOOL WXViewContainsWeChatTabText(UIView *view) {
-    if (!view) return NO;
+static NSString *WXFindTabTextInView(UIView *view) {
+    if (!view) return nil;
 
-    NSString *text = WXTextFromView(view);
-    if (WXIsWeChatTabText(text)) {
-        return YES;
+    NSString *text = WXNormalizeTabText(WXTextFromView(view));
+    if (text.length > 0) {
+        return text;
     }
 
     for (UIView *subview in view.subviews) {
-        if (WXViewContainsWeChatTabText(subview)) {
-            return YES;
+        NSString *found = WXFindTabTextInView(subview);
+        if (found.length > 0) {
+            return found;
         }
     }
 
-    return NO;
+    return nil;
 }
 
-static void WXDoLightHaptic(void) {
+static void WXDoTabHaptic(NSString *tabText) {
+    if (!WXTabHapticEnabled()) return;
+    if (tabText.length == 0) return;
+
     NSTimeInterval now = NSDate.date.timeIntervalSince1970;
 
-    // 防止一次点击触发多次震动
-    if (now - WXLastHapticTime < 0.25) {
+    // 防止一次点击因为多个 hook 重复震动
+    if (now - WXLastHapticTime < 0.18) {
         return;
     }
 
+    // 如果不允许重复点击当前 Tab 震动，则过滤
+    if (!WXAllowRepeatCurrentTabHaptic() &&
+        WXLastTabText &&
+        [WXLastTabText isEqualToString:tabText]) {
+        return;
+    }
+
+    WXLastTabText = tabText;
     WXLastHapticTime = now;
 
     dispatch_async(dispatch_get_main_queue(), ^{
         if (@available(iOS 10.0, *)) {
-            UIImpactFeedbackGenerator *generator =
-                [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
-
+            UISelectionFeedbackGenerator *generator = [[UISelectionFeedbackGenerator alloc] init];
             [generator prepare];
-            [generator impactOccurred];
+            [generator selectionChanged];
+        }
+    });
+}
+
+static void WXPrepareHaptic(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (@available(iOS 10.0, *)) {
+            UISelectionFeedbackGenerator *generator = [[UISelectionFeedbackGenerator alloc] init];
+            [generator prepare];
         }
     });
 }
 
 %hook UITabBarButton
 
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (WXViewContainsWeChatTabText((UIView *)self)) {
-        WXDoLightHaptic();
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSString *tabText = WXFindTabTextInView((UIView *)self);
+
+    if (tabText.length > 0) {
+        WXPrepareHaptic();
+        WXDoTabHaptic(tabText);
     }
 
     %orig;
@@ -78,9 +125,12 @@ static void WXDoLightHaptic(void) {
 
 %hook MMTabBarItemView
 
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (WXViewContainsWeChatTabText((UIView *)self)) {
-        WXDoLightHaptic();
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSString *tabText = WXFindTabTextInView((UIView *)self);
+
+    if (tabText.length > 0) {
+        WXPrepareHaptic();
+        WXDoTabHaptic(tabText);
     }
 
     %orig;
@@ -89,5 +139,5 @@ static void WXDoLightHaptic(void) {
 %end
 
 %ctor {
-    NSLog(@"[WXTabHaptic] 微信底栏震动反馈已加载");
+    NSLog(@"[WXTabHaptic] optimized loaded");
 }
