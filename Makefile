@@ -8,6 +8,6 @@ TWEAK_NAME = WXTabHaptic
 
 WXTabHaptic_FILES = Tweak.xm
 WXTabHaptic_CFLAGS = -fobjc-arc -Wno-error=deprecated-declarations -Wno-error=unused-variable -Wno-error=unused-function
-WXTabHaptic_FRAMEWORKS = UIKit Foundation
+WXTabHaptic_FRAMEWORKS = UIKit Foundation AudioToolbox
 
 include $(THEOS_MAKE_PATH)/tweak.mk
