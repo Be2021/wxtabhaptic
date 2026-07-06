@@ -90,13 +90,15 @@ static void WXDoTabHaptic(NSString *tabText) {
     WXLastTabText = tabText;
     WXLastHapticTime = now;
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (@available(iOS 10.0, *)) {
-            UISelectionFeedbackGenerator *generator = [[UISelectionFeedbackGenerator alloc] init];
-            [generator prepare];
-            [generator selectionChanged];
-        }
-    });
+dispatch_async(dispatch_get_main_queue(), ^{
+    if (@available(iOS 10.0, *)) {
+        UIImpactFeedbackGenerator *generator =
+            [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+
+        [generator prepare];
+        [generator impactOccurred];
+    }
+});
 }
 
 static void WXPrepareHaptic(void) {
